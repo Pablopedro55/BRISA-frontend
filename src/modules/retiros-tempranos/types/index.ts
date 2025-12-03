@@ -72,19 +72,22 @@ export interface Estudiante {
   direccion?: string;
   telefono?: string;
   correo?: string;
+  curso?: string; // Campo adicional para mostrar en UI
 }
 
-// Apoderado
+// Apoderado (basado en ApoderadoResponseDTO del backend)
+// El backend usa "apellidos" como campo único, no apellido_paterno/apellido_materno
 export interface Apoderado {
   id_apoderado: number;
   ci: string;
   nombres: string;
-  apellido_paterno: string;
-  apellido_materno: string;
-  parentesco: string;
+  apellidos: string; // El backend usa "apellidos" como campo único
   telefono?: string;
   correo?: string;
   direccion?: string;
+  // Campos que se agregan al obtener desde relaciones
+  parentesco?: string;
+  es_contacto_principal?: boolean;
 }
 
 // Tipo para los filtros de búsqueda
