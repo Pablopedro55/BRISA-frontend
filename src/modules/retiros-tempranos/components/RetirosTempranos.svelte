@@ -10,7 +10,22 @@
     retirosActions,
   } from "../stores/retiros";
   import { registrosService } from "../services/api";
-  import { Plus, Clock, Check, Calendar, X, Eye, LogOut } from "lucide-svelte";
+  import {
+    getNombreEstudiante,
+    getNombreApoderado,
+    getEstudiantePorId,
+    getApoderadoPorId,
+  } from "../data/mockData";
+  import {
+    Plus,
+    Clock,
+    Check,
+    Calendar,
+    X,
+    Eye,
+    LogOut,
+    Users,
+  } from "lucide-svelte";
 
   // Importar componentes UI
   import Card from "$lib/components/ui/Card.svelte";
@@ -30,8 +45,10 @@
 
   // Importar componentes del módulo
   import ModalNuevaSolicitud from "./ModalNuevaSolicitud.svelte";
+  import ModalRetiroMasivo from "./ModalRetiroMasivo.svelte";
 
   let mostrarModal = false;
+  let mostrarModalMasivo = false;
 
   // Rastrear solicitudes que ya tienen registro de salida
   let solicitudesConRegistro = new Set<number>();
@@ -41,6 +58,12 @@
     await retirosActions.cargarSolicitudes();
     await retirosActions.cargarMotivos();
   });
+
+  // Función para obtener nombre de motivo
+  function getNombreMotivo(idMotivo: number): string {
+    const motivo = $motivos.find((m) => m.id_motivo === idMotivo);
+    return motivo?.nombre || `Motivo ${idMotivo}`;
+  }
 
   // Función para obtener el badge según el estado
   function getEstadoBadge(estado: string): {
@@ -170,13 +193,23 @@
         Gestiona las solicitudes de retiro anticipado
       </p>
     </div>
-    <Button
-      className="bg-accent hover:bg-accent-hover text-white"
-      on:click={() => (mostrarModal = true)}
-    >
-      <Plus class="w-4 h-4 mr-2" />
-      Nueva Solicitud
-    </Button>
+    <div class="flex gap-2">
+      <Button
+        variant="outline"
+        className="border-blue-500 text-blue-600 hover:bg-blue-50"
+        on:click={() => (mostrarModalMasivo = true)}
+      >
+        <Users class="w-4 h-4 mr-2" />
+        Retiro Masivo
+      </Button>
+      <Button
+        className="bg-accent hover:bg-accent-hover text-white"
+        on:click={() => (mostrarModal = true)}
+      >
+        <Plus class="w-4 h-4 mr-2" />
+        Nueva Solicitud
+      </Button>
+    </div>
   </div>
 
   <!-- Cards de Resumen -->
@@ -279,8 +312,8 @@
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
               <TableHead>Estudiante</TableHead>
+              <TableHead>Apoderado</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Hora Salida</TableHead>
               <TableHead>Motivo</TableHead>
@@ -292,11 +325,11 @@
             {#each $solicitudesFiltradas as solicitud (solicitud.id_solicitud)}
               {@const badgeInfo = getEstadoBadge(solicitud.estado)}
               <TableRow>
-                <TableCell className="text-primary"
-                  >#{solicitud.id_solicitud}</TableCell
-                >
+                <TableCell className="text-primary font-medium">
+                  {getNombreEstudiante(solicitud.id_estudiante)}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
-                  Estudiante {solicitud.id_estudiante}
+                  {getNombreApoderado(solicitud.id_apoderado)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {formatearFecha(solicitud.fecha_creacion)}
@@ -305,7 +338,7 @@
                   {formatearHora(solicitud.fecha_hora_salida)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  Motivo {solicitud.id_motivo}
+                  {getNombreMotivo(solicitud.id_motivo)}
                 </TableCell>
                 <TableCell>
                   <Badge variant={badgeInfo.variant}>
@@ -383,3 +416,6 @@
 
 <!-- Modal Nueva Solicitud -->
 <ModalNuevaSolicitud bind:open={mostrarModal} motivos={$motivos} />
+
+<!-- Modal Retiro Masivo -->
+<ModalRetiroMasivo bind:open={mostrarModalMasivo} motivos={$motivos} />

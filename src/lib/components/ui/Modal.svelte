@@ -1,18 +1,22 @@
+<script context="module" lang="ts">
+  import { fade } from "svelte/transition";
+</script>
+
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { cn } from '$lib/utils/cn';
-  import { X } from 'lucide-svelte';
-  import Button from './Button.svelte';
+  import { createEventDispatcher } from "svelte";
+  import { cn } from "$lib/utils/cn";
+  import { X } from "lucide-svelte";
+  import Button from "./Button.svelte";
 
   export let open: boolean = false;
-  export let title: string = '';
-  export let className: string = '';
+  export let title: string = "";
+  export let className: string = "";
 
   const dispatch = createEventDispatcher();
 
   function close() {
     open = false;
-    dispatch('close');
+    dispatch("close");
   }
 
   function handleBackdropClick(e: MouseEvent) {
@@ -22,7 +26,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && open) {
+    if (e.key === "Escape" && open) {
       close();
     }
   }
@@ -32,21 +36,35 @@
 
 {#if open}
   <!-- Backdrop -->
-  <div 
-    class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+  <div
+    class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"
     on:click={handleBackdropClick}
+    role="dialog"
+    aria-modal="true"
+    on:keydown={handleKeydown}
+    tabindex="-1"
     transition:fade={{ duration: 200 }}
   >
-    <!-- Modal -->
-    <div class="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 p-6">
-      <div class={cn('bg-white rounded-lg shadow-lg', className)}>
+    <!-- Modal Container - permite scroll vertical -->
+    <div class="flex min-h-full items-center justify-center p-4">
+      <!-- Modal -->
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <div
+        class={cn(
+          "bg-white rounded-lg shadow-lg w-full max-w-lg relative",
+          className
+        )}
+        on:click|stopPropagation
+      >
         <!-- Header -->
         {#if title}
-          <div class="flex items-center justify-between p-6 pb-4 border-b border-border">
+          <div
+            class="flex items-center justify-between p-6 pb-4 border-b border-border"
+          >
             <h2 class="text-xl font-semibold text-foreground">{title}</h2>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               on:click={close}
               className="h-8 w-8"
             >
@@ -56,14 +74,10 @@
         {/if}
 
         <!-- Content -->
-        <div class="p-6">
+        <div class="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
           <slot />
         </div>
       </div>
     </div>
   </div>
 {/if}
-
-<script context="module" lang="ts">
-  import { fade } from 'svelte/transition';
-</script>
