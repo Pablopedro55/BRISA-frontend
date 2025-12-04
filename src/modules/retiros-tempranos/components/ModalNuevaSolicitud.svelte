@@ -11,7 +11,15 @@
   import Label from "$lib/components/ui/Label.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
-  import { Search, Clock, AlertCircle, User, Users } from "lucide-svelte";
+  import {
+    Search,
+    Clock,
+    AlertCircle,
+    User,
+    Users,
+    Camera,
+  } from "lucide-svelte";
+  import { onDestroy } from "svelte";
 
   export let open = false;
   export let motivos: MotivoRetiro[] = [];
@@ -37,6 +45,14 @@
   let cargando = false;
   let errorMsg = "";
   let mostrandoResultados = false;
+
+  // Estado de cámara / foto (opcional)
+  let cameraOpen = false;
+  let cameraStream: MediaStream | null = null;
+  let cameraError = "";
+  let videoElement: HTMLVideoElement | null = null;
+  let photoPreview: string | null = null; // preview dentro de la UI de cámara
+  let fotoSolicitud: string | null = null; // foto aceptada que se muestra en el formulario
 
   // Constantes para validación de horario escolar
   const HORA_MINIMA = "07:00";
@@ -123,6 +139,15 @@
     return motivo?.nombre.toLowerCase().includes("otro") || false;
   }
 
+  function detenerStream() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      cameraStream = null;
+    }
+  }
+
+  onDestroy(detenerStream);
+
   function resetearFormulario() {
     terminoBusqueda = "";
     estudiantesEncontrados = [];
@@ -138,6 +163,13 @@
       observacion: "",
     };
     errorMsg = "";
+
+    // limpiar estado de cámara / foto
+    fotoSolicitud = null;
+    photoPreview = null;
+    cameraOpen = false;
+    cameraError = "";
+    detenerStream();
   }
 
   function handleClose() {
@@ -193,7 +225,9 @@
 
       let observacion = formData.observacion || "";
       if (esMotivoOtro() && formData.motivo_otro) {
-        observacion = `Motivo especificado: ${formData.motivo_otro}${observacion ? `. ${observacion}` : ""}`;
+        observacion = `Motivo especificado: ${formData.motivo_otro}${
+          observacion ? `. ${observacion}` : ""
+        }`;
       }
 
       const solicitud = {
@@ -205,6 +239,7 @@
           ? new Date(formData.fecha_hora_retorno_previsto).toISOString()
           : undefined,
         observacion: observacion || undefined,
+        // foto: fotoSolicitud, // ← cuando tengas campo en el backend, se puede enviar aquí
       };
 
       await retirosActions.crearSolicitud(solicitud);
@@ -216,6 +251,78 @@
     } finally {
       cargando = false;
     }
+  }
+
+  // --- Lógica de cámara ---
+
+  async function abrirCamara() {
+    cameraError = "";
+    photoPreview = null;
+    cameraOpen = true;
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraError = "Este navegador no soporta captura de cámara.";
+      return;
+    }
+
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+    } catch (error) {
+      cameraError =
+        error instanceof Error
+          ? `No se pudo acceder a la cámara: ${error.message}`
+          : "No se pudo acceder a la cámara. Revise los permisos.";
+    }
+  }
+
+  function capturarFoto() {
+    if (!videoElement) return;
+
+    const canvas = document.createElement("canvas");
+    const width = videoElement.videoWidth || 640;
+    const height = videoElement.videoHeight || 480;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(videoElement, 0, 0, width, height);
+    photoPreview = canvas.toDataURL("image/jpeg");
+    detenerStream();
+  }
+
+  function cerrarCamara() {
+    cameraOpen = false;
+    cameraError = "";
+    photoPreview = null;
+    detenerStream();
+  }
+
+  function reintentarFoto() {
+    photoPreview = null;
+    cameraError = "";
+    detenerStream();
+    abrirCamara();
+  }
+
+function aceptarFoto() {
+  if (!photoPreview) return;
+  fotoSolicitud = photoPreview;
+  cameraOpen = false;
+  cameraError = "";
+  alert(
+    "Foto registrada correctamente."
+  );
+}
+
+
+  // Asignar stream al <video> cuando exista
+  $: if (cameraOpen && cameraStream && videoElement) {
+    videoElement.srcObject = cameraStream;
   }
 
   $: validacionHora = formData.hora_salida
@@ -278,8 +385,7 @@
                 on:click={() => seleccionarEstudiante(estudiante)}
               >
                 <div class="font-medium text-gray-900">
-                  {estudiante.nombres}
-                  {estudiante.apellido_paterno}
+                  {estudiante.nombres} {estudiante.apellido_paterno}
                   {estudiante.apellido_materno}
                 </div>
                 <div class="text-sm text-gray-500 flex gap-3">
@@ -345,10 +451,8 @@
         </option>
         {#each apoderadosDisponibles as apoderado (apoderado.id_apoderado)}
           <option value={apoderado.id_apoderado}>
-            {apoderado.nombres}
-            {apoderado.apellidos}
-            ({apoderado.parentesco})
-            {apoderado.es_contacto_principal ? "⭐" : ""}
+            {apoderado.nombres} {apoderado.apellidos} ({apoderado.parentesco})
+            {apoderado.es_contacto_principal ? " ⭐" : ""}
           </option>
         {/each}
       </Select>
@@ -449,6 +553,59 @@
       />
     </div>
 
+        <!-- Foto opcional de referencia -->
+    <div class="space-y-2">
+      <Label class="flex items-center gap-2">
+        <Camera class="w-4 h-4" />
+        Foto opcional de referencia
+      </Label>
+
+      <div class="flex flex-col items-center gap-3 w-full">
+        <!-- Área grande para tomar foto -->
+        <button
+          type="button"
+          class="w-full max-w-sm aspect-video rounded-xl border border-dashed border-gray-300 flex flex-col items-center justify-center text-sm text-gray-500 hover:border-blue-500 hover:text-blue-600 transition-colors bg-gray-50"
+          on:click={abrirCamara}
+          disabled={cargando}
+        >
+          <Camera class="w-8 h-8 mb-2" />
+          <span>Tomar foto</span>
+          <span class="text-[11px] mt-1 text-gray-400">Opcional</span>
+        </button>
+
+        {#if fotoSolicitud}
+          <!-- Preview de la foto aceptada -->
+          <div class="flex flex-col items-center gap-2 w-full max-w-sm">
+            <img
+              src={fotoSolicitud}
+              alt="Foto tomada para la solicitud"
+              class="w-full aspect-video object-cover rounded border"
+            />
+            <div class="flex items-center justify-between w-full gap-2">
+              <span class="text-[11px] text-gray-500">
+                Foto registrada para esta solicitud (solo en esta sesión).
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-xs px-2 py-1"
+                on:click={() => (fotoSolicitud = null)}
+                disabled={cargando}
+              >
+                Quitar foto
+              </Button>
+            </div>
+          </div>
+        {:else}
+          <!-- Descripción pequeña debajo, centrada -->
+          <p class="text-xs text-gray-500 text-center max-w-sm">
+            Puede tomar una foto como respaldo visual del retiro.
+          </p>
+        {/if}
+      </div>
+    </div>
+
+
     <!-- Mensaje de error -->
     {#if errorMsg}
       <div
@@ -480,3 +637,105 @@
     </div>
   </form>
 </Modal>
+
+{#if cameraOpen}
+  <div
+    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+  >
+    <div
+      class="bg-white rounded-xl shadow-xl w-full max-w-md p-4 space-y-4 mx-4"
+    >
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <Camera class="w-5 h-5" />
+          <h2 class="text-sm font-semibold">
+            Tomar foto de referencia
+          </h2>
+        </div>
+        <button
+          type="button"
+          class="text-gray-400 hover:text-gray-600 text-sm"
+          on:click={cerrarCamara}
+        >
+          Cerrar
+        </button>
+      </div>
+
+      {#if cameraError}
+        <p class="text-sm text-red-600">
+          {cameraError}
+        </p>
+      {/if}
+
+      {#if photoPreview}
+        <!-- Vista previa de la foto tomada -->
+        <div class="space-y-3">
+          <div
+            class="aspect-video rounded-lg overflow-hidden border bg-black/5 flex items-center justify-center"
+          >
+            <img
+              src={photoPreview}
+              alt="Foto tomada"
+              class="w-full h-full object-contain"
+            />
+          </div>
+          <p class="text-xs text-gray-500">
+            Verifique que la imagen sea legible antes de aceptar.
+          </p>
+          <div class="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              on:click={reintentarFoto}
+            >
+              Reintentar
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              on:click={aceptarFoto}
+            >
+              Aceptar
+            </Button>
+          </div>
+        </div>
+      {:else}
+        <!-- Cámara activa para tomar la foto -->
+        <div
+          class="aspect-video bg-black/5 rounded-lg overflow-hidden flex items-center justify-center"
+        >
+          {#if cameraStream}
+            <video
+              bind:this={videoElement}
+              autoplay
+              playsinline
+              class="w-full h-full object-cover"
+            />
+          {:else}
+            <p class="text-xs text-gray-500">
+              Activando cámara...
+            </p>
+          {/if}
+        </div>
+
+        <div class="flex justify-between items-center mt-3">
+          <Button
+            type="button"
+            variant="outline"
+            on:click={cerrarCamara}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            on:click={capturarFoto}
+            disabled={!cameraStream || !!cameraError}
+          >
+            Sacar foto
+          </Button>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
